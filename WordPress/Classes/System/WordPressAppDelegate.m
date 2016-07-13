@@ -343,6 +343,13 @@ int ddLogLevel = DDLogLevelInfo;
     completionHandler([shortcutHandler handleShortcutItem:shortcutItem]);
 }
 
+- (void)application:(UIApplication *)application handleEventsForBackgroundURLSession:(NSString *)identifier completionHandler:(void (^)())completionHandler
+{
+    if (completionHandler) {
+        completionHandler();
+    }
+}
+
 #pragma mark - Application startup
 
 - (void)runStartupSequenceWithLaunchOptions:(NSDictionary *)launchOptions

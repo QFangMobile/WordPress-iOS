@@ -122,12 +122,16 @@ class ShareViewController: SLComposeServiceViewController {
         let (subject, body) = contentText.stringWithAnchoredLinks().splitContentTextIntoSubjectAndBody()
         let encodedMedia = mediaImage?.resizeWithMaximumSize(maximumImageSize).JPEGEncoded()
 
-        uploadPostWithSubject(subject, body: body, status: postStatus, siteID: siteID, attachedImageData: encodedMedia) {
-            self.tracks.trackExtensionPosted(self.postStatus)
-            self.extensionContext?.completeRequestReturningItems([], completionHandler: nil)
+        self.extensionContext?.completeRequestReturningItems([], completionHandler: { expired in
+            self.createPostWithSubject(subject, body: body, status: self.postStatus, siteID: siteID, attachedImageData: encodedMedia, requestEqueued: {
+                self.tracks.trackExtensionPosted(self.postStatus)
 
-// TODO: Handle retry?
-        }
+                // TODO: Handle retry?
+            }) { (post, error) in
+                print("⚠️ Post \(post) Error \(error)")
+            }
+        })
+
     }
 
     override func configurationItems() -> [AnyObject]! {
@@ -246,14 +250,41 @@ private extension ShareViewController
 ///
 private extension ShareViewController
 {
-    func uploadPostWithSubject(subject: String, body: String, status: String, siteID: Int, attachedImageData: NSData?, requestEqueued: Void -> ()) {
+    func createPostWithSubject(subject: String, body: String, status: String, siteID: Int, attachedImageData: NSData?, requestEqueued: Void -> (), completion: (post: Post?, error: ErrorType?) -> Void) {
+        uploadMedia(siteID, attachedImageData: attachedImageData) { (media, error) in
+            var updatedBody = body
+            if let media = media {
+                updatedBody = updatedBody.stringByAppendingString("\n<img src=\"\(media.remoteURL)\"/>")
+            }
+
+            self.uploadPostWithSubject(subject, body: updatedBody, status: status, siteID: siteID, attachedMedia: media, requestEqueued: requestEqueued, completion: completion)
+        }
+
+    }
+
+    func uploadMedia(siteID: Int, attachedImageData: NSData?, completion: (media: Media?, error: ErrorType?) -> Void) {
+        guard let attachedImageData = attachedImageData else {
+            completion(media: nil, error: nil)
+            return
+        }
+
+        let configuration = NSURLSessionConfiguration.backgroundSessionConfigurationWithRandomizedIdentifier()
+        let service = MediaService(configuration: configuration)
+
+        service.createMedia(attachedImageData, siteID: siteID) { media, error in
+            completion(media: media, error: error)
+        }
+    }
+
+    func uploadPostWithSubject(subject: String, body: String, status: String, siteID: Int, attachedMedia: Media?, requestEqueued: Void -> (), completion: (post: Post?, error: ErrorType?) -> Void) {
         let configuration = NSURLSessionConfiguration.backgroundSessionConfigurationWithRandomizedIdentifier()
         let service = PostService(configuration: configuration)
 
-        service.createPost(siteID: siteID, status: status, title: subject, body: body, attachedImageJPEGData: attachedImageData, requestEqueued: {
+        service.createPost(siteID: siteID, status: status, title: subject, body: body, attachedImageJPEGData: nil, requestEqueued: {
             requestEqueued()
         }, completion: { (post, error) in
-            print("Post \(post) Error \(error)")
+            print("‼️ Post \(post) Error \(error)")
+            completion(post: post, error: error)
         })
     }
 }
