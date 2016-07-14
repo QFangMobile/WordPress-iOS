@@ -8,7 +8,7 @@ extension NSURLSessionConfiguration
     /// Returns a new Background Session Configuration, with a random identifier.
     ///
     class func backgroundSessionConfigurationWithRandomizedIdentifier() -> NSURLSessionConfiguration {
-        let identifier = WPAppGroupName + "." + NSUUID().UUIDString
+        let identifier = WPAppGroupName + "." + "WordPressShareExtension"
         let configuration = NSURLSessionConfiguration.backgroundSessionConfigurationWithIdentifier(identifier)
         configuration.sharedContainerIdentifier = WPAppGroupName
 

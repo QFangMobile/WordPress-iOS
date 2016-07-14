@@ -1,6 +1,7 @@
 import UIKit
 import Social
 import WordPressComKit
+import Alamofire
 
 
 class ShareViewController: SLComposeServiceViewController {
@@ -66,7 +67,7 @@ class ShareViewController: SLComposeServiceViewController {
         "publish"   : NSLocalizedString("Publish", comment: "Publish post status")
     ]
 
-
+    private lazy var manager: Alamofire.Manager = { Alamofire.Manager(configuration: NSURLSessionConfiguration.backgroundSessionConfigurationWithRandomizedIdentifier()) }()
 
     // MARK: - UIViewController Methods
 
@@ -117,19 +118,22 @@ class ShareViewController: SLComposeServiceViewController {
             fatalError("The view should have been dismissed on viewDidAppear!")
         }
 
+        
 
         // Proceed uploading the actual post
         let (subject, body) = contentText.stringWithAnchoredLinks().splitContentTextIntoSubjectAndBody()
         let encodedMedia = mediaImage?.resizeWithMaximumSize(maximumImageSize).JPEGEncoded()
 
-        self.extensionContext?.completeRequestReturningItems([], completionHandler: { expired in
-            self.createPostWithSubject(subject, body: body, status: self.postStatus, siteID: siteID, attachedImageData: encodedMedia, requestEqueued: {
-                self.tracks.trackExtensionPosted(self.postStatus)
+        self.createPostWithSubject(subject, body: body, status: self.postStatus, siteID: siteID, attachedImageData: encodedMedia, requestEqueued: {
+            self.tracks.trackExtensionPosted(self.postStatus)
 
-                // TODO: Handle retry?
-            }) { (post, error) in
-                print("⚠️ Post \(post) Error \(error)")
-            }
+            // TODO: Handle retry?
+        }) { (post, error) in
+            self.manager = nil
+            print("⚠️ Post \(post) Error \(error)")
+        }
+
+        self.extensionContext?.completeRequestReturningItems([], completionHandler: { expired in
         })
 
     }
@@ -268,8 +272,7 @@ private extension ShareViewController
             return
         }
 
-        let configuration = NSURLSessionConfiguration.backgroundSessionConfigurationWithRandomizedIdentifier()
-        let service = MediaService(configuration: configuration)
+        let service = MediaService(manager: manager)
 
         service.createMedia(attachedImageData, siteID: siteID) { media, error in
             completion(media: media, error: error)
@@ -277,8 +280,7 @@ private extension ShareViewController
     }
 
     func uploadPostWithSubject(subject: String, body: String, status: String, siteID: Int, attachedMedia: Media?, requestEqueued: Void -> (), completion: (post: Post?, error: ErrorType?) -> Void) {
-        let configuration = NSURLSessionConfiguration.backgroundSessionConfigurationWithRandomizedIdentifier()
-        let service = PostService(configuration: configuration)
+        let service = PostService(manager: manager)
 
         service.createPost(siteID: siteID, status: status, title: subject, body: body, attachedImageJPEGData: nil, requestEqueued: {
             requestEqueued()
